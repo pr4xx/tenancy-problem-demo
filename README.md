@@ -1,66 +1,47 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# Setup
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+- `git clone`
+- `cp .env.example .env`
+- `composer install`
+- `php artisan key:generate`
+- `php artisan migrate --seed`
 
-## About Laravel
+# Intended behaviour
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+- `php artisan reset-queue-timestamp`
+  - Only to make sure there is no previous timestamp
+- `php artisan dispatch-tenant-jobs`
+- `php artisan queue:work`
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+The work command will process 3 jobs, each job dumping info about the current tenant.
+This is intended behaviour.
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+# Problem
 
-## Learning Laravel
+- `php artisan queue:restart`
+- `php artisan dispatch-tenant-jobs`
+- `php artisan queue:work`
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
+The work command will only process one job and then exit. You can run it multiple times, and it will process all 3 jobs.
 
-You may also try the [Laravel Bootcamp](https://bootcamp.laravel.com), where you will be guided through building a modern Laravel application from scratch.
+Reason: when running `queue:restart`, Laravel will set the current timestamp to the `illuminate:queue:restart` cache key.
+The queue worker, as soon as at least one job with tenant context has been run, tries to get the current value of that cache key.
+But since the `QueueTenancyBootstrapper` never calls `tenancy()->end()` after completing a job (only at the beginning of the next job),
+the redis prefix never gets reverted.
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+You can get intended behaviour by running `php artisan reset-queue-timestamp`. This will simply delete the timestamp and the queue worker
+will compare `null` with `null`.
 
-## Laravel Sponsors
+# The configuration
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+Main problem is probably adding the `cache` connection to `prefixed_connections` in the tenancy config.
+I found no way of telling Laravel to use a different cache store for the `illuminate:queue:restart` key, this would prevent this issue.
 
-### Premium Partners
+# Workaround
 
-- **[Vehikl](https://vehikl.com/)**
-- **[Tighten Co.](https://tighten.co)**
-- **[WebReinvent](https://webreinvent.com/)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel/)**
-- **[Cyber-Duck](https://cyber-duck.co.uk)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Jump24](https://jump24.co.uk)**
-- **[Redberry](https://redberry.international/laravel/)**
-- **[Active Logic](https://activelogic.com)**
-- **[byte5](https://byte5.de)**
-- **[OP.GG](https://op.gg)**
+As stancl mentioned in Discord, a current workaround is to update the if statement in this file:
+https://github.com/archtechx/tenancy/blob/8f9c7efa4584007f41048448d0a11f572a1d3239/src/Bootstrappers/QueueTenancyBootstrapper.php#L74
+To `($runningTests || static::$forceRefresh)`.
+This will trigger running the revert operation after each job, removing the Redis prefix, allowing the worker to fetch the correct value.
 
-## Contributing
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
-
-## Code of Conduct
-
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
-
-## Security Vulnerabilities
-
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
-
-## License
-
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
