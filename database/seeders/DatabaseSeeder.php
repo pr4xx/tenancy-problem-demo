@@ -5,6 +5,7 @@ namespace Database\Seeders;
 use App\Models\User;
 // use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
+use Stancl\Tenancy\Database\Models\Tenant;
 
 class DatabaseSeeder extends Seeder
 {
@@ -13,11 +14,14 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        // User::factory(10)->create();
-
-        User::factory()->create([
-            'name' => 'Test User',
-            'email' => 'test@example.com',
+        Tenant::query()->create([
+            'id' => 'test-tenant-1'
+        ]);
+        Tenant::query()->create([
+            'id' => 'test-tenant-2'
+        ]);
+        Tenant::query()->create([
+            'id' => 'test-tenant-3'
         ]);
     }
 }
