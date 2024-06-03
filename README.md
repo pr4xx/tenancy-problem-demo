@@ -37,6 +37,7 @@ Because then, when the job runs, it will switch to the tenant context but not ba
 
 # The configuration
 
+This issue only appears when using the `RedisTenancyBootstrapper` together with `QueueTenancyBootstrapper`.
 Main problem is probably adding the `cache` connection to `prefixed_connections` in the tenancy config.
 I found no way of telling Laravel to use a different cache store for the `illuminate:queue:restart` key, this would prevent this issue.
 
