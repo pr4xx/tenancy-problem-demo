@@ -32,6 +32,9 @@ the redis prefix never gets reverted.
 You can get intended behaviour by running `php artisan reset-queue-timestamp`. This will simply delete the timestamp and the queue worker
 will compare `null` with `null`.
 
+Also: this problem only appears when the queue worker runs jobs which have been dispatched within a tenant context.
+Because then, when the job runs, it will switch to the tenant context but not back.
+
 # The configuration
 
 Main problem is probably adding the `cache` connection to `prefixed_connections` in the tenancy config.
